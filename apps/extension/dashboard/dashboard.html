@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manabie Lesson Tools Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <div class="dashboard">
+    <header class="dashboard-header">
+      <h1>Manabie Lesson Tools</h1>
+      <span id="org-badge" class="org-badge">接続確認中…</span>
+      <span id="sandbox-badge" class="org-badge sandbox-badge hidden">Sandbox</span>
+      <button id="btn-sync-masters" class="btn">前提マスタ同期</button>
+      <button id="btn-open-drawer" class="btn">リスト / タイムスロット</button>
+      <button id="btn-register" class="btn primary" disabled>Manabieへ登録</button>
+    </header>
+
+    <div id="setup-checklist-root"></div>
+
+    <nav class="tab-bar">
+      <button class="tab-btn active" data-tab="booth">コマ組</button>
+      <button class="tab-btn" data-tab="print">PrintSheet</button>
+      <button class="tab-btn" data-tab="report">回数報告</button>
+      <button class="tab-btn" data-tab="lessons">授業スケジュール</button>
+      <button class="tab-btn" data-tab="closed">休校日</button>
+      <button class="tab-btn" data-tab="preview">Manabie登録</button>
+    </nav>
+
+    <main class="dashboard-main">
+      <div id="blocked-message" class="panel-card hidden">
+        <p>Org コンテキストが無効です。Salesforce タブから拡張を開き直してください。</p>
+      </div>
+
+      <section id="tab-booth" class="tab-panel">
+        <div id="booth-panel-root"></div>
+      </section>
+
+      <section id="tab-print" class="tab-panel hidden">
+        <div id="print-sheet-panel-root"></div>
+      </section>
+
+      <section id="tab-report" class="tab-panel hidden">
+        <div id="report-panel-root"></div>
+      </section>
+
+      <section id="tab-lessons" class="tab-panel hidden">
+        <div class="calendar-workspace">
+          <div id="lesson-panel-root" class="calendar-main"></div>
+          <div id="lesson-editor-root" class="editor-drawer-host"></div>
+        </div>
+      </section>
+
+      <section id="tab-closed" class="tab-panel hidden">
+        <div class="calendar-workspace">
+          <div id="closed-panel-root" class="calendar-main"></div>
+          <div id="closed-editor-root" class="editor-drawer-host"></div>
+        </div>
+      </section>
+
+      <section id="tab-preview" class="tab-panel hidden">
+        <div id="master-sync-summary" class="panel-card"></div>
+        <div id="preview-panel-root"></div>
+        <div id="closed-register-panel" class="panel-card hidden">
+          <h2>休校日 Manabie 登録（Phase 1.5）</h2>
+          <label>拠点
+            <select id="closed-location-select"></select>
+          </label>
+          <div class="footer-actions">
+            <button type="button" id="btn-register-closed" class="btn primary">休校日を Manabie へ登録</button>
+          </div>
+        </div>
+      </section>
+
+      <details class="execution-log-panel">
+        <summary>実行ログ（詳細）</summary>
+        <pre id="execution-log" class="execution-log">—</pre>
+      </details>
+    </main>
+  </div>
+
+  <aside id="side-drawer" class="drawer">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <strong>設定</strong>
+      <button id="btn-close-drawer" class="btn">×</button>
+    </div>
+    <div id="drawer-root"></div>
+  </aside>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>

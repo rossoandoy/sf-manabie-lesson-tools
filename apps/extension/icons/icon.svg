@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Manabie Lesson Tools">
+  <rect width="128" height="128" rx="24" fill="#2376cc"/>
+  <!-- school roof -->
+  <path d="M28 58 L64 32 L100 58 Z" fill="#ffffff"/>
+  <!-- school body -->
+  <rect x="34" y="58" width="60" height="44" rx="4" fill="#ffffff"/>
+  <!-- door -->
+  <rect x="56" y="74" width="16" height="28" rx="2" fill="#2376cc"/>
+  <!-- windows -->
+  <rect x="42" y="66" width="12" height="12" rx="2" fill="#2376cc"/>
+  <rect x="74" y="66" width="12" height="12" rx="2" fill="#2376cc"/>
+  <!-- calendar badge -->
+  <rect x="78" y="78" width="34" height="32" rx="5" fill="#ffffff"/>
+  <rect x="78" y="78" width="34" height="10" rx="5" fill="#1c5fa8"/>
+  <rect x="78" y="84" width="34" height="4" fill="#1c5fa8"/>
+  <circle cx="88" cy="83" r="2" fill="#ffffff"/>
+  <circle cx="102" cy="83" r="2" fill="#ffffff"/>
+  <rect x="84" y="94" width="6" height="6" rx="1.5" fill="#2376cc"/>
+  <rect x="92" y="94" width="6" height="6" rx="1.5" fill="#c9d8ef"/>
+  <rect x="100" y="94" width="6" height="6" rx="1.5" fill="#2376cc"/>
+  <rect x="84" y="102" width="6" height="6" rx="1.5" fill="#c9d8ef"/>
+  <rect x="92" y="102" width="6" height="6" rx="1.5" fill="#2376cc"/>
+  <rect x="100" y="102" width="6" height="6" rx="1.5" fill="#c9d8ef"/>
+</svg>

@@ -1,0 +1,21 @@
+{
+  "name": "sf-manabie-lesson-tools",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Manabie Lesson scheduling Chrome extension (MV3)",
+  "scripts": {
+    "build": "npm --prefix apps/extension run build",
+    "watch": "npm --prefix apps/extension run watch",
+    "test": "npm --prefix apps/extension run test",
+    "typecheck": "npm --prefix apps/extension run typecheck",
+    "package": "npm --prefix apps/extension run package",
+    "discover": "bash scripts/discover-lesson-objects.sh",
+    "e2e:live": "npm --prefix apps/extension run e2e:live",
+    "e2e:live:dry": "npm --prefix apps/extension run e2e:live:dry",
+    "e2e:master-sync": "npm --prefix apps/extension run e2e:master-sync",
+    "verify": "npm test && npm run build && npm run package"
+  },
+  "workspaces": [
+    "apps/extension"
+  ]
+}
