@@ -6,6 +6,7 @@ export interface SetupChecklistState {
   accountId: string;
   hostname: string;
   invoiceSynced: boolean;
+  affiliationHint?: string | null;
 }
 
 export function isSetupComplete(state: SetupChecklistState): boolean {
@@ -37,9 +38,14 @@ export function renderSetupChecklist(root: HTMLElement, state: SetupChecklistSta
       <h2>はじめに（セットアップ）</h2>
       <ol class="setup-checklist-list">
         ${item(masterDone, '前提マスタ同期', { tab: 'booth', label: 'ヘッダーから同期' })}
-        ${item(accountDone, 'コマ組で拠点（Account）を選択', { tab: 'booth', label: 'コマ組を開く' })}
+        ${item(accountDone, accountDone ? '所属校舎（Account）が設定済み' : '所属校舎を確認（Affiliation または手動選択）', { tab: 'booth', label: 'コマ組を開く' })}
         ${invoiceOptional ? item(invoiceDone, '（任意）請求データ F13 初回同期', { tab: 'report', label: '回数報告を開く' }) : ''}
       </ol>
+      ${
+        !accountDone && state.affiliationHint
+          ? `<p class="muted setup-checklist-hint">${state.affiliationHint}</p>`
+          : ''
+      }
     </div>
   `;
 }

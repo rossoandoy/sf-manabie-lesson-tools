@@ -12,10 +12,11 @@ Extension popup
 
 Dashboard tab
   ├─ master catalog sync
-  ├─ lesson schedule calendar UI
-  ├─ closed date calendar UI
-  ├─ import plan preview
-  └─ sandbox execution
+  ├─ booth grid / lesson calendar (コマ組)
+  ├─ print sheet (授業一覧) + Sync Dock
+  ├─ report (回数報告)
+  ├─ closed date calendar
+  └─ sandbox execution (Manabie登録)
 
 Service worker
   └─ Cookie Broker only: obtain sid cookie and return session context
@@ -26,17 +27,22 @@ Dashboard direct fetch
 
 This follows the Salesforce Inspector Reloaded style used by `sf-manabie-product-creator`.
 
-## Tabs
+## Tabs（v0.3.0）
 
 | Tab | Purpose |
 |-----|---------|
-| 授業スケジュール | Lesson schedule input (lesson-csv-app equivalent) |
-| 休校日 | Closed date input (closed_date_csv equivalent) |
-| 登録内容の確認 | ImportPlan preview + CSV audit export |
+| コマ組 | Booth grid 1:2, calendar sub-view, repeat / bulk delete |
+| 授業一覧 | PrintSheet rows, filters, Sync Dock (F19 / 3B / 3C) |
+| 回数報告 | Monthly report, F13 invoice cache |
+| 休校日 | Closed dates (month view) |
+| Manabie登録 | ImportPlan preview + legacy schedule registration |
 
 Primary CTA: **Manabieへ登録** (Sandbox confirmation phrase: `EXECUTE SANDBOX`).
 
-CSV export remains available as audit/fallback output only.
+## Org-specific configuration
+
+Account ブース数など org ごとに異なるフィールドは hostname ベースで解決します。  
+See [org-configuration.md](./org-configuration.md).
 
 ## Booth / PrintSheet data flow (Phase 8)
 
@@ -54,4 +60,4 @@ Sync Dock Execute (F19 / 3B / 3C)
   → contentHash stale detection on edit
 ```
 
-Phase 9 adds booth slot clipboard, teacher repeat, grade auto-fill, day toolbar, transfer queue, and week copy — see [phase9-booth-ux-spike.md](./phase9-booth-ux-spike.md).
+Phase 9–17 adds booth slot clipboard, teacher/student repeat, affiliation-scoped pickers, R04 rollover, and entity search modals — see phase spike docs in README.

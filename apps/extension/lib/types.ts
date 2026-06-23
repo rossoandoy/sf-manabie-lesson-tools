@@ -28,6 +28,7 @@ export interface GetStatusRequest {
 
 export interface OrgIdentity {
   orgId: string;
+  userId: string;
   username: string;
   instanceUrl: string;
   isSandbox: boolean;

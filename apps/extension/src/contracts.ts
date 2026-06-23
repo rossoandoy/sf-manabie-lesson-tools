@@ -37,6 +37,7 @@ export interface LessonMasterCatalog {
     classrooms: CatalogRecord[];
     teachers: CatalogRecord[];
     students: CatalogRecord[];
+    subjects: CatalogRecord[];
     academicCalendars: CatalogRecord[];
   };
 }

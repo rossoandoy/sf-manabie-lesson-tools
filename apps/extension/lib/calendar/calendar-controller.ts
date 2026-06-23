@@ -79,10 +79,15 @@ export class CalendarController {
       const target = (event.target as HTMLElement).closest('[data-action]') as HTMLElement | null;
       if (!target) {
         const cell = (event.target as HTMLElement).closest('[data-date]') as HTMLElement | null;
-        if (cell?.dataset.date && this.options.mode === 'lesson') {
-          this.options.onEditLesson?.(null, cell.dataset.date);
-        } else if (cell?.dataset.date && this.options.mode === 'closed') {
-          this.options.onEditClosed?.(null, cell.dataset.date);
+        if (cell?.dataset.date) {
+          const date = cell.dataset.date;
+          this.state = selectDate(this.state, date);
+          this.render();
+          if (this.options.mode === 'lesson') {
+            this.options.onEditLesson?.(null, date);
+          } else if (this.options.mode === 'closed') {
+            this.options.onEditClosed?.(null, date);
+          }
         }
         return;
       }
@@ -94,8 +99,8 @@ export class CalendarController {
       else if (action === 'today') this.state = jumpToToday(this.state);
       else if (action === 'toggle-mini') this.state = toggleMiniCalendar(this.state);
       else if (action === 'view-month') this.state = setView(this.state, 'month');
-      else if (action === 'view-week') this.state = setView(this.state, 'week');
-      else if (action === 'view-day') this.state = setView(this.state, 'day');
+      else if (action === 'view-week' && this.options.mode !== 'closed') this.state = setView(this.state, 'week');
+      else if (action === 'view-day' && this.options.mode !== 'closed') this.state = setView(this.state, 'day');
       else if (action === 'add-lesson') this.options.onEditLesson?.(null, this.state.selectedDate);
       else if (action === 'export-csv') this.options.onExportCsv?.();
       else if (action === 'clear-all') this.options.onClearAll?.();

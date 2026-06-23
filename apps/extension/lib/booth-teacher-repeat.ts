@@ -9,7 +9,7 @@ export interface TeacherRepeatRecord {
   dow: number;
   period: number;
   booth: number;
-  interval: 'weekly' | 'biweekly';
+  interval: 'weekly' | 'daily' | 'biweekly';
   startDate: string;
   endDate: string;
   status: 'active' | 'ended';
@@ -25,14 +25,23 @@ export interface TeacherRepeatSkip {
 export function dryRunTeacherRepeat(
   input: Omit<TeacherRepeatRecord, 'id' | 'status' | 'createdAt' | 'updatedAt'>,
   closedDates: ClosedDateDefinition[],
+  session?: BoothGridSession,
 ): { dates: string[]; skips: TeacherRepeatSkip[] } {
   const closed = new Set(closedDates.map((c) => c.date));
   const dates = expandRepeatDates(input.startDate, input.endDate, input.interval, input.dow);
   const skips: TeacherRepeatSkip[] = [];
+  const targetTeacher = input.teacherName.trim();
   const applicable = dates.filter((date) => {
     if (closed.has(date)) {
       skips.push({ date, reason: '休校日' });
       return false;
+    }
+    if (session) {
+      const existing = getSlotMeta(session, date, input.booth, input.period).teacherName.trim();
+      if (existing && existing !== targetTeacher) {
+        skips.push({ date, reason: `講師衝突: ${existing}` });
+        return false;
+      }
     }
     return true;
   });
@@ -44,7 +53,7 @@ export function applyTeacherRepeat(
   input: Omit<TeacherRepeatRecord, 'id' | 'status' | 'createdAt' | 'updatedAt'>,
   closedDates: ClosedDateDefinition[],
 ): { repeatId: string; applied: number; skips: TeacherRepeatSkip[] } {
-  const { dates, skips } = dryRunTeacherRepeat(input, closedDates);
+  const { dates, skips } = dryRunTeacherRepeat(input, closedDates, session);
   const repeatId = newRepeatId();
   const now = new Date().toISOString();
   let applied = 0;
@@ -87,7 +96,7 @@ export function rescheduleTeacherRepeat(
     }
   }
 
-  const { dates, skips } = dryRunTeacherRepeat(record, closedDates);
+  const { dates, skips } = dryRunTeacherRepeat(record, closedDates, session);
   let applied = 0;
   for (const date of dates) {
     upsertSlotMeta(session, {
@@ -100,6 +109,15 @@ export function rescheduleTeacherRepeat(
   }
   record.updatedAt = new Date().toISOString();
   return { applied, skips };
+}
+
+/** Mark teacher repeat as ended without clearing slotMeta (Phase 16 policy). */
+export function endTeacherRepeatRecord(session: BoothGridSession, repeatId: string): boolean {
+  const record = session.teacherRepeatRecords?.find((r) => r.id === repeatId && r.status === 'active');
+  if (!record) return false;
+  record.status = 'ended';
+  record.updatedAt = new Date().toISOString();
+  return true;
 }
 
 export function teacherNameForSlot(

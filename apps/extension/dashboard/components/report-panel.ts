@@ -11,6 +11,14 @@ import {
 import { BoothActivitySource, ManaerpStudentSessionSource, uniqueStudentNames } from '../../lib/lesson-activity-source';
 import type { LessonActivitySource } from '../../lib/lesson-activity-source';
 import { loadBoothSession } from '../../lib/booth-session-state';
+import {
+  enrolledStudentsForReport,
+  loadCenterScopedCatalog,
+  studentsForPicker,
+  type CenterScopedCatalog,
+} from '../../src/services/center-scoped-catalog';
+import { mountEntitySearchModal } from './entity-search-modal';
+import { renderEntityNamePickerRow, syncEntityNameDisplay } from './entity-name-picker-row';
 import { createDashboardApiClient } from '../../lib/salesforce-api-client';
 import { syncInvoicesFromSalesforce, isInvoiceBillingConfigured } from '../../src/services/invoiceSyncService';
 import { confirmSandboxExecute } from './confirm-modal';
@@ -36,61 +44,118 @@ export interface ReportPanelRefreshOptions {
   closedDates?: ClosedDateDefinition[];
 }
 
-function mergeStudentOptions(catalog: LessonMasterCatalog | null, boothNames: string[]): string[] {
-  const names = new Set<string>(boothNames);
-  for (const student of catalog?.catalogs.students ?? []) {
-    if (student.name.trim()) names.add(student.name.trim());
-  }
-  return [...names].sort((a, b) => a.localeCompare(b, 'ja'));
-}
-
-function closedDateSet(closedDates: ClosedDateDefinition[]): Set<string> {
-  return new Set(closedDates.map((item) => item.date));
+function findContactId(
+  catalog: LessonMasterCatalog | null,
+  centerCatalog: CenterScopedCatalog | null,
+  studentName: string,
+): string | undefined {
+  const trimmed = studentName.trim();
+  if (!trimmed) return undefined;
+  const scoped = studentsForPicker(centerCatalog, catalog?.catalogs.students).find(
+    (student) => student.name.trim() === trimmed,
+  );
+  if (scoped?.id) return scoped.id;
+  return catalog?.catalogs.students.find((student) => student.name.trim() === trimmed)?.id;
 }
 
 function formatMetric(value: number): string {
   return value > 0 ? String(value) : '';
 }
 
-function renderReportTable(report: MonthlyReportResult, diffMonthKeys?: Set<string>): string {
-  const body = report.rows
-    .map((row) => {
-      const rowCls = [
-        row.kind === 'yearEnd' || row.kind === 'grandTotal' || row.kind === 'priorYearEnd'
-          ? 'report-row-summary'
-          : '',
-        row.kind === 'month' && row.monthKey && diffMonthKeys?.has(row.monthKey) ? 'report-row-diff' : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
-      return `<tr class="${rowCls}">
-        <td>${row.label}</td>
-        <td>${row.leftItem}</td>
-        <td>${formatMetric(row.left.billing)}</td>
-        <td>${formatMetric(row.left.paid)}</td>
-        <td>${row.monthKey ?? row.label}</td>
-        <td>${formatMetric(row.right.planned)}</td>
-        <td>${formatMetric(row.right.present)}</td>
-        <td>${formatMetric(row.right.absent)}</td>
-        <td class="report-makeup">${formatMetric(row.right.makeup)}</td>
-        <td>${formatMetric(row.right.executed)}</td>
-      </tr>`;
-    })
-    .join('');
+function formatCreatedDate(iso: string): string {
+  const date = new Date(iso);
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+}
 
-  return `<table class="report-table">
-    <thead>
-      <tr>
-        <th colspan="4" class="report-head-left">授業申込・支払 状況</th>
-        <th colspan="6" class="report-head-right">授業予定・実施 状況</th>
-      </tr>
-      <tr>
-        <th>項目</th><th>内訳</th><th>請求中</th><th>支払済</th>
-        <th>月</th><th>予定</th><th>出席</th><th>欠席</th><th>振替</th><th>実施</th>
-      </tr>
-    </thead>
-    <tbody>${body}</tbody>
-  </table>`;
+function fiscalYearInvoiceMonthOptions(fiscalYearRaw: string, syncedMonths: Set<string>): string {
+  const year = Number(fiscalYearRaw.trim()) || schoolYearFromDate(formatDateKey(new Date()));
+  const options = [`<option value="">全件（空）</option>`];
+  for (let month = 4; month <= 12; month += 1) {
+    const key = `${year}/${String(month).padStart(2, '0')}`;
+    const synced = syncedMonths.has(key) ? '（同期済）' : '';
+    options.push(`<option value="${key}">${key}${synced}</option>`);
+  }
+  for (let month = 1; month <= 3; month += 1) {
+    const key = `${year + 1}/${String(month).padStart(2, '0')}`;
+    const synced = syncedMonths.has(key) ? '（同期済）' : '';
+    options.push(`<option value="${key}">${key}${synced}</option>`);
+  }
+  return options.join('');
+}
+
+function syncedInvoiceMonths(entries: { monthKey?: string }[]): Set<string> {
+  return new Set(entries.map((entry) => String(entry.monthKey ?? '').trim()).filter(Boolean));
+}
+
+function reportRowClass(row: MonthlyReportResult['rows'][number], diffMonthKeys?: Set<string>): string {
+  return [
+    row.kind === 'yearEnd' || row.kind === 'grandTotal' || row.kind === 'priorYearEnd'
+      ? 'report-row-summary'
+      : '',
+    row.kind === 'month' && row.monthKey && diffMonthKeys?.has(row.monthKey) ? 'report-row-diff' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function reportItemLabel(row: MonthlyReportResult['rows'][number]): string {
+  if (row.kind === 'month' && row.leftItem) {
+    return `${row.label}<div class="report-item-sub">${row.leftItem}</div>`;
+  }
+  return row.label;
+}
+
+export function renderReportTablesHtml(report: MonthlyReportResult, diffMonthKeys?: Set<string>): string {
+  const leftBody = report.rows
+    .map(
+      (row) => `<tr class="${reportRowClass(row, diffMonthKeys)}">
+        <td>${reportItemLabel(row)}</td>
+        <td class="report-num">${formatMetric(row.left.billing)}</td>
+        <td class="report-num">${formatMetric(row.left.paid)}</td>
+      </tr>`,
+    )
+    .join('');
+  const rightBody = report.rows
+    .map(
+      (row) => `<tr class="${reportRowClass(row, diffMonthKeys)}">
+        <td>${reportItemLabel(row)}</td>
+        <td class="report-num">${formatMetric(row.right.planned)}</td>
+        <td class="report-num">${formatMetric(row.right.present)}</td>
+        <td class="report-num">${formatMetric(row.right.absent)}</td>
+        <td class="report-num report-makeup">${formatMetric(row.right.makeup)}</td>
+      </tr>`,
+    )
+    .join('');
+  const created = formatCreatedDate(report.generatedAt);
+
+  return `<div class="report-print-header">
+      <h1 class="report-print-title">授業回数報告</h1>
+      <div class="report-print-meta">
+        <span>生徒: <span class="report-meta-value">${report.studentName}</span></span>
+        <span>契約: <span class="report-meta-value">${report.contract}</span></span>
+        <span>作成: <span class="report-meta-value">${created}</span></span>
+      </div>
+    </div>
+    <div class="report-tables-split">
+      <table class="report-table report-table-left">
+        <thead>
+          <tr><th colspan="3" class="report-head-left">授業申込・支払状況</th></tr>
+          <tr><th>項目</th><th>請求中</th><th>支払済</th></tr>
+        </thead>
+        <tbody>${leftBody}</tbody>
+      </table>
+      <table class="report-table report-table-right">
+        <thead>
+          <tr><th colspan="5" class="report-head-right">授業予定・実施状況</th></tr>
+          <tr><th>授業予定・実施状況</th><th>予定</th><th>出席</th><th>欠席</th><th>振替</th></tr>
+        </thead>
+        <tbody>${rightBody}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderReportTable(report: MonthlyReportResult, diffMonthKeys?: Set<string>): string {
+  return renderReportTablesHtml(report, diffMonthKeys);
 }
 
 function discoveryConfig(hostname: string) {
@@ -113,10 +178,8 @@ function invoiceBillingConfigured(hostname: string): boolean {
   return isInvoiceBillingConfigured(invoiceBillingConfig(hostname));
 }
 
-function findContactId(catalog: LessonMasterCatalog | null, studentName: string): string | undefined {
-  const trimmed = studentName.trim();
-  if (!trimmed) return undefined;
-  return catalog?.catalogs.students.find((student) => student.name.trim() === trimmed)?.id;
+function closedDateSet(closedDates: ClosedDateDefinition[]): Set<string> {
+  return new Set(closedDates.map((item) => item.date));
 }
 
 export async function mountReportPanel(
@@ -126,6 +189,7 @@ export async function mountReportPanel(
   let catalog = options.catalog;
   let closedDates = options.closedDates;
   let session = await loadBoothSession(options.hostname);
+  let centerCatalog: CenterScopedCatalog | null = null;
   let invoiceCache = await loadInvoiceCache(options.hostname);
   let selectedStudent = '';
   let currentReport: MonthlyReportResult | null = null;
@@ -134,15 +198,25 @@ export async function mountReportPanel(
   let manaerpSessions: NormalizedLessonSession[] = [];
   let reportNotice = '';
   let diffMonthKeys = new Set<string>();
+  let closeStudentPicker: (() => void) | null = null;
 
   const shell = document.createElement('div');
   shell.className = 'report-layout';
   shell.innerHTML = `
     <section class="panel-card report-controls">
       <h2>回数報告（F06）</h2>
-      <p class="muted">PrintSheet / コマ組データから月次の予定・実施を集計します。左表（請求/入金）は SF 請求データ（F13）で充填します。</p>
+      <p class="muted">授業一覧 / コマ組データから月次の予定・実施を集計します。左表（請求/入金）は SF 請求データ（F13）で充填します。</p>
       <div class="report-meta-grid">
-        <label>生徒<select id="report-student"></select></label>
+        <label>生徒
+          <div id="report-student-picker-row">
+            ${renderEntityNamePickerRow({
+              value: '',
+              placeholder: '生徒を選択',
+              pickAction: 'report-student-pick',
+              clearAction: 'report-student-clear',
+            })}
+          </div>
+        </label>
         <label>年度<input id="report-fiscal-year" placeholder="例: 2026" /></label>
         <label>契約<span id="report-contract" class="report-contract">—</span></label>
         <label>作成<span id="report-generated" class="muted">—</span></label>
@@ -150,11 +224,15 @@ export async function mountReportPanel(
       <div class="report-meta-grid">
         <label>データソース
           <select id="report-data-source">
-            <option value="booth">コマ組 / PrintSheet</option>
+            <option value="booth">コマ組 / 授業一覧</option>
             <option value="manaerp">Manabie SF（Lesson + Session）</option>
           </select>
         </label>
-        <label>請求対象月（任意）<input id="report-invoice-month" placeholder="YYYY/MM（空=全件）" /></label>
+        <label>請求対象月（任意）
+          <select id="report-invoice-month">
+            <option value="">全件（空）</option>
+          </select>
+        </label>
         <label>請求同期<span id="report-invoice-sync" class="muted">未同期</span></label>
       </div>
       <div class="footer-actions">
@@ -162,15 +240,12 @@ export async function mountReportPanel(
         <button type="button" class="btn" data-action="report-sync-invoice">請求データ同期（F13）</button>
         <button type="button" class="btn" data-action="report-csv" disabled>CSV 出力（F11）</button>
         <button type="button" class="btn" data-action="report-print" disabled>印刷（A4）</button>
-        <button type="button" class="btn" data-action="booth-print-a3">コマ組 A3 印刷（F12）</button>
       </div>
       <p id="report-sync-message" class="muted"></p>
       <p id="report-sync-dock-hint" class="report-sync-dock-hint hidden"></p>
       <p id="report-notice" class="muted"></p>
     </section>
     <section class="panel-card report-output-host">
-      <h2>授業回数報告</h2>
-      <p id="report-title" class="report-title">授業回数報告</p>
       <div id="report-table-host"><p class="muted">生徒を選び「回数報告を更新」を押してください。</p></div>
       <div class="report-sign-block">
         <div><strong>保護者署名</strong><span class="report-sign-line"></span></div>
@@ -180,11 +255,10 @@ export async function mountReportPanel(
   `;
   root.replaceChildren(shell);
 
-  const studentSelect = shell.querySelector('#report-student') as HTMLSelectElement;
+  const studentPickerRow = shell.querySelector('#report-student-picker-row') as HTMLElement;
   const fiscalInput = shell.querySelector('#report-fiscal-year') as HTMLInputElement;
-  const invoiceMonthInput = shell.querySelector('#report-invoice-month') as HTMLInputElement;
+  const invoiceMonthSelect = shell.querySelector('#report-invoice-month') as HTMLSelectElement;
   const tableHost = shell.querySelector('#report-table-host') as HTMLElement;
-  const titleEl = shell.querySelector('#report-title') as HTMLElement;
   const contractEl = shell.querySelector('#report-contract') as HTMLElement;
   const generatedEl = shell.querySelector('#report-generated') as HTMLElement;
   const invoiceSyncEl = shell.querySelector('#report-invoice-sync') as HTMLElement;
@@ -194,6 +268,17 @@ export async function mountReportPanel(
   const dataSourceSelect = shell.querySelector('#report-data-source') as HTMLSelectElement;
   const csvBtn = shell.querySelector('[data-action="report-csv"]') as HTMLButtonElement;
   const printBtn = shell.querySelector('[data-action="report-print"]') as HTMLButtonElement;
+
+  const renderInvoiceMonthOptions = () => {
+    const selected = invoiceMonthSelect.value;
+    invoiceMonthSelect.innerHTML = fiscalYearInvoiceMonthOptions(
+      fiscalInput.value,
+      syncedInvoiceMonths(invoiceCache.entries),
+    );
+    if (selected && [...invoiceMonthSelect.options].some((opt) => opt.value === selected)) {
+      invoiceMonthSelect.value = selected;
+    }
+  };
 
   const renderInvoiceSyncMeta = () => {
     const billingReady = invoiceBillingConfigured(options.hostname);
@@ -207,30 +292,72 @@ export async function mountReportPanel(
       if (billingReady) {
         syncDockHintEl.classList.remove('hidden');
         syncDockHintEl.innerHTML =
-          '請求データ（F13）が未同期です。PrintSheet の <button type="button" class="btn btn-sm" data-action="goto-sync-dock">Sync Dock</button> から Manabie 同期を行えます。';
+          '請求データ（F13）が未同期です。授業一覧の <button type="button" class="btn btn-sm" data-action="goto-sync-dock">Sync Dock</button> から Manabie 同期を行えます。';
       } else {
         syncDockHintEl.classList.add('hidden');
       }
     }
     syncMessageEl.textContent = syncMessage;
+    renderInvoiceMonthOptions();
   };
 
-  const refreshStudentOptions = () => {
+  const reloadCenterCatalog = async (): Promise<void> => {
+    const accountId = session.settings.accountId.trim();
+    if (!accountId) {
+      centerCatalog = null;
+      return;
+    }
+    try {
+      centerCatalog = await loadCenterScopedCatalog(accountId, session.settings.classroomName);
+    } catch {
+      centerCatalog = null;
+    }
+  };
+
+  const reportStudentRecords = (): ReturnType<typeof enrolledStudentsForReport> => {
     const boothSource = new BoothActivitySource(session.cells, session.settings, session.slotMeta);
     const manaerpSource = new ManaerpStudentSessionSource(manaerpSessions);
-    const names = mergeStudentOptions(catalog, [
+    return enrolledStudentsForReport(centerCatalog, catalog?.catalogs.students, [
       ...uniqueStudentNames(boothSource),
       ...uniqueStudentNames(manaerpSource),
     ]);
-    studentSelect.innerHTML =
-      `<option value="">— 選択 —</option>` +
-      names.map((name) => `<option value="${name.replace(/"/g, '&quot;')}">${name}</option>`).join('');
-    if (selectedStudent && names.includes(selectedStudent)) {
-      studentSelect.value = selectedStudent;
-    }
+  };
+
+  const syncStudentInputDisplay = () => {
+    syncEntityNameDisplay(studentPickerRow, selectedStudent, '生徒を選択');
     if (!fiscalInput.value.trim()) {
       fiscalInput.value = session.settings.fiscalYear || String(reportFiscalYearDefault(session));
     }
+  };
+
+  const openReportStudentPicker = () => {
+    const records = reportStudentRecords();
+    if (!records.length) {
+      showToast('生徒一覧がありません。拠点 Account を設定してください。', 'error');
+      return;
+    }
+    closeStudentPicker?.();
+    closeStudentPicker = mountEntitySearchModal({
+      kind: 'student',
+      title: '生徒を選択（回数報告）',
+      records,
+      initialQuery: selectedStudent,
+      onSelect: (record) => {
+        selectedStudent = record.name;
+        syncStudentInputDisplay();
+      },
+      onClose: () => {
+        closeStudentPicker = null;
+      },
+    });
+  };
+
+  const refreshStudentOptions = () => {
+    const names = reportStudentRecords().map((s) => s.name);
+    if (selectedStudent && !names.includes(selectedStudent)) {
+      selectedStudent = '';
+    }
+    syncStudentInputDisplay();
   };
 
   function reportFiscalYearDefault(sess: typeof session): number {
@@ -248,9 +375,8 @@ export async function mountReportPanel(
       generatedEl.textContent = '—';
       return;
     }
-    titleEl.textContent = `授業回数報告 — ${currentReport.studentName}（${currentReport.contract}）`;
     contractEl.textContent = currentReport.contract;
-    generatedEl.textContent = new Date(currentReport.generatedAt).toLocaleString('ja-JP');
+    generatedEl.textContent = formatCreatedDate(currentReport.generatedAt);
     tableHost.innerHTML = renderReportTable(currentReport, diffMonthKeys);
     csvBtn.disabled = false;
     printBtn.disabled = false;
@@ -282,7 +408,6 @@ export async function mountReportPanel(
   };
 
   const updateReport = async () => {
-    selectedStudent = studentSelect.value.trim();
     reportNotice = '';
     diffMonthKeys = new Set();
     if (!selectedStudent) {
@@ -296,7 +421,7 @@ export async function mountReportPanel(
       currentReport = buildMonthlyReport(source, selectedStudent, fiscalInput.value.trim() || undefined, {
         billing: invoiceCache.entries,
         closedDates: closedDateSet(closedDates),
-        contactId: findContactId(catalog, selectedStudent),
+        contactId: findContactId(catalog, centerCatalog, selectedStudent),
       });
 
       if (activityDataSource === 'manaerp') {
@@ -345,7 +470,7 @@ export async function mountReportPanel(
       renderInvoiceSyncMeta();
       return;
     }
-    const targetMonth = invoiceMonthInput.value.trim();
+    const targetMonth = invoiceMonthSelect.value.trim();
     try {
       const result = await syncInvoicesFromSalesforce(createDashboardApiClient(), {
         targetMonth: targetMonth || undefined,
@@ -386,6 +511,14 @@ export async function mountReportPanel(
     const action = target.dataset.action;
     if (action === 'report-refresh') {
       void updateReport();
+    } else if (action === 'report-student-pick') {
+      openReportStudentPicker();
+    } else if (action === 'report-student-clear') {
+      selectedStudent = '';
+      syncStudentInputDisplay();
+      currentReport = null;
+      renderReport();
+      reportNoticeEl.textContent = '';
     } else if (action === 'report-sync-invoice') {
       void syncInvoices();
     } else if (action === 'goto-sync-dock') {
@@ -399,10 +532,6 @@ export async function mountReportPanel(
       document.body.classList.add('print-report-a4');
       window.print();
       window.setTimeout(() => document.body.classList.remove('print-report-a4'), 500);
-    } else if (action === 'booth-print-a3') {
-      document.body.classList.add('print-booth-a3');
-      window.print();
-      window.setTimeout(() => document.body.classList.remove('print-booth-a3'), 500);
     }
   });
 
@@ -410,6 +539,11 @@ export async function mountReportPanel(
     activityDataSource = dataSourceSelect.value === 'manaerp' ? 'manaerp' : 'booth';
   });
 
+  fiscalInput.addEventListener('change', () => {
+    renderInvoiceMonthOptions();
+  });
+
+  await reloadCenterCatalog();
   refreshStudentOptions();
   if (!invoiceBillingConfigured(options.hostname)) {
     syncMessage =
@@ -423,7 +557,10 @@ export async function mountReportPanel(
   return async (partial) => {
     if (partial?.catalog !== undefined) catalog = partial.catalog;
     if (partial?.closedDates) closedDates = partial.closedDates;
-    if (partial?.reloadSession) session = await loadBoothSession(options.hostname);
+    if (partial?.reloadSession) {
+      session = await loadBoothSession(options.hostname);
+      await reloadCenterCatalog();
+    }
     refreshStudentOptions();
     if (selectedStudent) await updateReport();
   };

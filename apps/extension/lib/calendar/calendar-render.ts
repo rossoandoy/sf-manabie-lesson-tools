@@ -98,8 +98,102 @@ function renderDayTimeline(options: CalendarRenderOptions): string {
   </div>`;
 }
 
+function lessonsForPeriod(
+  lessons: LessonScheduleDefinition[],
+  dateKey: string,
+  period: number,
+): LessonScheduleDefinition[] {
+  const dayLessons = lessonsForDate(lessons, dateKey);
+  const times = [...new Set(dayLessons.map((l) => l.startTime))].sort();
+  const slotTime = times[period - 1];
+  if (!slotTime) return [];
+  return dayLessons.filter((l) => l.startTime === slotTime);
+}
+
+function periodTimeLabel(
+  lessons: LessonScheduleDefinition[],
+  dateKeys: string[],
+  period: number,
+): string {
+  const times = new Set<string>();
+  for (const key of dateKeys) {
+    for (const lesson of lessonsForPeriod(lessons, key, period)) {
+      times.add(lesson.startTime);
+    }
+  }
+  const sorted = [...times].sort();
+  if (sorted.length === 1) return sorted[0]!;
+  if (sorted.length > 1) return sorted[0]!;
+  return '';
+}
+
+function renderWeekPeriodGrid(options: CalendarRenderOptions): string {
+  const dates = visibleDates(options.state);
+  const dateKeys = dates.map(formatDateKey);
+  const todayKey = formatDateKey(new Date());
+  const weekdayShort = ['日', '月', '火', '水', '木', '金', '土'];
+  const headerCells = dates
+    .map((date) => {
+      const key = formatDateKey(date);
+      const cls = [
+        key === options.state.selectedDate ? 'selected-col' : '',
+        key === todayKey ? 'today-col' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return `<th class="week-col-head ${cls}"><button type="button" class="week-col-btn" data-action="select-date" data-date="${key}">${weekdayShort[date.getDay()]}<br>${date.getMonth() + 1}/${date.getDate()}</button></th>`;
+    })
+    .join('');
+
+  const periodCount = 6;
+  const bodyRows = Array.from({ length: periodCount }, (_, idx) => {
+    const period = idx + 1;
+    const timeHint = periodTimeLabel(options.lessons, dateKeys, period);
+    const periodHead = timeHint
+      ? `${period}限<br><span class="muted period-time-hint">${escapeHtml(timeHint)}</span>`
+      : `${period}限`;
+    const cells = dates
+      .map((date) => {
+        const key = formatDateKey(date);
+        const closed = closedForDate(options.closedDates, key);
+        const selected = key === options.state.selectedDate ? 'selected' : '';
+        const today = key === todayKey ? 'today' : '';
+        const closedCls = closed.length ? 'closed-day' : '';
+
+        if (options.mode === 'closed') {
+          const content = closed.length
+            ? closed.map((c) => renderClosedChip(c, true)).join('')
+            : '<span class="week-cell-hint muted">＋</span>';
+          return `<td class="week-period-cell ${closedCls} ${selected} ${today}" data-date="${key}" data-period="${period}">${content}</td>`;
+        }
+
+        const chips = [
+          ...closed.map((c) => renderClosedChip(c, false)),
+          ...lessonsForPeriod(options.lessons, key, period).map((l) => renderLessonChip(l, true)),
+        ].join('');
+        return `<td class="week-period-cell ${closedCls} ${selected} ${today}" data-date="${key}" data-period="${period}">${chips || '<span class="week-cell-hint muted">＋</span>'}</td>`;
+      })
+      .join('');
+    return `<tr><th class="period-row-head">${periodHead}</th>${cells}</tr>`;
+  }).join('');
+
+  const hint =
+    options.mode === 'closed'
+      ? '時限セルをクリックして休校日を登録・編集します。'
+      : '時限セルをクリックして授業を追加・編集します。列ヘッダーで日付を選択します。';
+
+  return `<div class="week-period-grid-wrap">
+    <table class="week-period-grid">
+      <thead><tr><th class="period-corner"></th>${headerCells}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+    <p class="muted calendar-week-hint">${hint}</p>
+  </div>`;
+}
+
 function renderGrid(options: CalendarRenderOptions): string {
   if (options.state.view === 'day') return renderDayTimeline(options);
+  if (options.state.view === 'week') return renderWeekPeriodGrid(options);
   const dates = visibleDates(options.state);
   const cells = dates.map((date) => renderCell(date, options.state.anchor, options)).join('');
   return `${renderWeekdayHeader()}<div class="calendar-grid">${cells}</div>`;
@@ -136,20 +230,33 @@ export function renderMiniCalendar(state: CalendarUIState): string {
 }
 
 export function renderToolbar(state: CalendarUIState, mode: 'lesson' | 'closed'): string {
-  const viewBtns = (['month', 'week', 'day'] as const)
-    .map((v) => {
-      const labels = { month: '月', week: '週', day: '日' };
-      return `<button type="button" class="btn ${state.view === v ? 'active-view' : ''}" data-action="view-${v}">${labels[v]}</button>`;
-    })
-    .join('');
+  const viewBtns =
+    mode === 'closed'
+      ? `<button type="button" class="btn active-view" data-action="view-month">月</button>`
+      : (['month', 'week', 'day'] as const)
+          .map((v) => {
+            const labels = { month: '月', week: '週', day: '日' };
+            return `<button type="button" class="btn ${state.view === v ? 'active-view' : ''}" data-action="view-${v}">${labels[v]}</button>`;
+          })
+          .join('');
 
   const extra =
     mode === 'lesson'
       ? `<button type="button" class="btn primary" data-action="add-lesson">+ 授業追加</button>
-         <button type="button" class="btn" data-action="export-csv">CSV（監査）</button>
+         <button type="button" class="btn" data-action="open-side-drawer">授業タイムスロット</button>
+         <button type="button" class="btn" data-action="export-csv">エクスポート（任意）</button>
          <button type="button" class="btn danger" data-action="clear-all">すべてクリア</button>`
-      : `<button type="button" class="btn" data-action="export-csv">CSV（監査）</button>
+      : `<button type="button" class="btn" data-action="export-csv">エクスポート（任意）</button>
          <button type="button" class="btn danger" data-action="clear-all">すべてクリア</button>`;
+
+  const legend =
+    mode === 'closed'
+      ? `<div class="calendar-legend">
+          <span class="calendar-legend-item calendar-legend-selected">選択中</span>
+          <span class="calendar-legend-item calendar-legend-today">今日</span>
+          <span class="calendar-legend-item calendar-legend-closed">休校日登録済</span>
+        </div>`
+      : '';
 
   return `<div class="grid-toolbar">
     <button type="button" class="btn" data-action="prev">◀</button>
@@ -164,7 +271,7 @@ export function renderToolbar(state: CalendarUIState, mode: 'lesson' | 'closed')
     </div>
     ${viewBtns}
     ${extra}
-  </div>`;
+  </div>${legend}`;
 }
 
 export function renderCalendarBody(options: CalendarRenderOptions): string {

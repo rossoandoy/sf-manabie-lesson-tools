@@ -68,7 +68,7 @@ export async function mountClosedDatePanel(
   });
 
   return async (partial) => {
-    if (partial.catalog !== undefined) options.catalog = partial.catalog;
+    if (partial?.catalog !== undefined) options.catalog = partial.catalog;
     session = await loadClosedDateSession(options.hostname);
     controller.updateOptions({ closedDates: session.closedDates, catalog: options.catalog });
   };

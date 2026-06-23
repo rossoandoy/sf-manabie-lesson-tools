@@ -1,6 +1,7 @@
 import type { ClosedDateDefinition } from '../../src/contracts';
 import {
   ATTENDANCE_OPTIONS,
+  attendanceCssClass,
   registerTransfer,
   setCellAttendance,
   type CellSeatRef,
@@ -19,6 +20,12 @@ export interface AttendancePanelOptions {
   getClosedDates: () => ClosedDateDefinition[];
   onChange: () => void;
   persist: () => Promise<void>;
+}
+
+function attendButtonClass(status: string, current: string | undefined, disabled: boolean): string {
+  const base = `btn attend-${status === '出席' ? 'present' : status === '欠席' ? 'absent' : 'makeup'}`;
+  const active = current === status ? ' attend-active' : '';
+  return `${base}${active}${disabled ? '' : ''}`;
 }
 
 export function mountAttendancePanel(
@@ -55,21 +62,21 @@ export function mountAttendancePanel(
       <h2>出欠記録</h2>
       <div class="attendance-seat-picker">
         ${seatOptions
-          .map(
-            ({ seat, label, cell }) =>
-              `<button type="button" class="btn ${sel.seat === seat ? 'primary' : ''}" data-action="pick-seat" data-seat="${seat}">
+          .map(({ seat, label, cell }) => {
+            const attendCls = attendanceCssClass(cell.attendance);
+            return `<button type="button" class="btn attendance-seat-btn ${sel.seat === seat ? 'attendance-seat-active' : ''} ${attendCls ? `booth-seat ${attendCls}` : ''}" data-action="pick-seat" data-seat="${seat}">
                 ${label}: ${cell.studentName || '—'}
-              </button>`,
-          )
+              </button>`;
+          })
           .join('')}
       </div>
-      <p class="attendance-status">現在: <strong>${active.attendance || '未確定'}</strong></p>
+      <p class="attendance-status${active.attendance === '欠席' ? ' attendance-status-absent' : active.attendance === '出席' ? ' attendance-status-present' : ''}">現在: <strong>${active.attendance || '未確定'}</strong></p>
       ${active.transferFrom ? `<p class="muted">振替元: ${active.transferFrom}</p>` : ''}
       ${active.transferTo ? `<p class="muted">振替先: ${active.transferTo}</p>` : ''}
       <div class="footer-actions attendance-actions">
-        <button type="button" class="btn attend-present" data-action="attend" data-status="出席" ${hasStudent ? '' : 'disabled'}>出席</button>
-        <button type="button" class="btn attend-absent" data-action="attend" data-status="欠席" ${hasStudent ? '' : 'disabled'}>欠席</button>
-        <button type="button" class="btn attend-makeup" data-action="attend" data-status="振替" ${hasStudent ? '' : 'disabled'}>振替</button>
+        <button type="button" class="${attendButtonClass('出席', active.attendance, !hasStudent)}" data-action="attend" data-status="出席" ${hasStudent ? '' : 'disabled'}>出席</button>
+        <button type="button" class="${attendButtonClass('欠席', active.attendance, !hasStudent)}" data-action="attend" data-status="欠席" ${hasStudent ? '' : 'disabled'}>欠席</button>
+        <button type="button" class="${attendButtonClass('振替', active.attendance, !hasStudent)}" data-action="attend" data-status="振替" ${hasStudent ? '' : 'disabled'}>振替</button>
       </div>
       <details class="transfer-form">
         <summary>振替登録</summary>

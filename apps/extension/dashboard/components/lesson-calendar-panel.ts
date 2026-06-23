@@ -79,8 +79,8 @@ export async function mountLessonCalendarPanel(
   });
 
   return async (partial) => {
-    if (partial.catalog !== undefined) options.catalog = partial.catalog;
-    if (partial.closedDates !== undefined) options.closedDates = partial.closedDates;
+    if (partial?.catalog !== undefined) options.catalog = partial.catalog;
+    if (partial?.closedDates !== undefined) options.closedDates = partial.closedDates;
     session = await loadLessonSession(options.hostname);
     controller.updateOptions({
       lessons: session.lessons,

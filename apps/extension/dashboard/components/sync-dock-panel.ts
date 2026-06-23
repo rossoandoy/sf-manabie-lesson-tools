@@ -76,7 +76,7 @@ export function renderSyncDock(root: HTMLElement, options: SyncDockOptions): voi
   root.innerHTML = '';
   root.className = 'sync-dock panel-card';
   root.id = 'sync-dock-root';
-  root.innerHTML = `<h2>Manabie 同期（Sync Dock）</h2>`;
+  root.innerHTML = `<h2>SF 同期（Sync Dock）</h2><p class="muted sync-dock-lead">TRG コマデータ（F19 Lesson_Slot__c）を正本とします。Manabie 3B/3C は任意です。</p>`;
   root.append(prereqHost, masterDetail, syncHost, summaryHost);
 }
 

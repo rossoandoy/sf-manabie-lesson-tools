@@ -20,6 +20,14 @@ export interface SlotSyncPanelOptions {
   reallocationPlan?: ReallocationPlan | null;
   studentSessionLoading?: boolean;
   scheduleGapReport?: import('../../src/services/lessonScheduleGapService').ScheduleGapReport | null;
+  productionWriteBlocked?: string | null;
+}
+
+function executeButtonAttrs(productionWriteBlocked: string | null | undefined, disabled: boolean): string {
+  if (productionWriteBlocked) {
+    return `disabled title="${productionWriteBlocked.replace(/"/g, '&quot;')}"`;
+  }
+  return disabled ? 'disabled' : '';
 }
 
 export function renderSlotSyncSummary(root: HTMLElement, options: SlotSyncPanelOptions): void {
@@ -30,33 +38,39 @@ export function renderSlotSyncSummary(root: HTMLElement, options: SlotSyncPanelO
     reallocationPlan = null,
     studentSessionLoading = false,
     scheduleGapReport = null,
+    productionWriteBlocked = null,
   } = options;
 
   const gapHtml = renderScheduleGapBannerPlainHtml(scheduleGapReport);
 
   const slotHtml = slotPlan
-    ? renderLessonSlotSection(slotPlan)
+    ? renderLessonSlotSection(slotPlan, productionWriteBlocked)
     : '<p class="muted">コマ組データから Lesson_Slot__c 同期プランを生成できます。</p>';
 
   const studentHtml = studentSessionLoading
     ? '<p class="muted">Manabie Student Session プランを生成中...</p>'
     : studentSessionPlan
-      ? renderStudentSessionSection(studentSessionPlan)
-      : '<p class="muted">Manabie 出欠同期（3B）: PrintSheet 行と Student Session を照合します。</p>';
+      ? renderStudentSessionSection(studentSessionPlan, productionWriteBlocked)
+      : '<p class="muted">Manabie 出欠同期（3B）: 授業一覧行と Student Session を照合します。</p>';
 
   const createHtml = studentSessionLoading
     ? ''
     : studentSessionCreatePlan
-      ? renderStudentSessionCreateSection(studentSessionCreatePlan)
+      ? renderStudentSessionCreateSection(studentSessionCreatePlan, productionWriteBlocked)
       : '';
 
   const reallocationHtml = studentSessionLoading
     ? ''
     : reallocationPlan
-      ? renderReallocationSection(reallocationPlan)
+      ? renderReallocationSection(reallocationPlan, productionWriteBlocked)
       : '';
 
-  root.innerHTML = `${gapHtml}${slotHtml}${reallocationHtml}${createHtml}${studentHtml}`;
+  root.innerHTML = `${gapHtml}
+    <div class="sync-dock-primary">${slotHtml}</div>
+    <details class="sync-dock-manabie-optional">
+      <summary>Manabie 連携（任意・Lesson Allocation 要確認）</summary>
+      ${reallocationHtml}${createHtml}${studentHtml}
+    </details>`;
 }
 
 function renderValidationIssues(issues: { severity: string; message: string }[]): string {
@@ -66,7 +80,7 @@ function renderValidationIssues(issues: { severity: string; message: string }[])
     .join('')}</ul>`;
 }
 
-function renderLessonSlotSection(plan: LessonSlotImportPlan): string {
+function renderLessonSlotSection(plan: LessonSlotImportPlan, productionWriteBlocked?: string | null): string {
   const batch = plan.batches[0];
   const previewRows = plan.sourceRows
     .slice(0, 8)
@@ -79,9 +93,10 @@ function renderLessonSlotSection(plan: LessonSlotImportPlan): string {
     .join('');
 
   return `
-    <div class="panel-card">
-      <h2>Lesson_Slot SF 同期（F19）</h2>
+    <div class="panel-card sync-dock-f19">
+      <h2>TRG コマデータ（F19 / Lesson_Slot__c）</h2>
       <p class="muted">拠点: ${plan.accountName || plan.accountId || '未設定'} / ${plan.sourceRows.length} 行</p>
+      <p class="muted">コマ組データを Sandbox の Lesson_Slot__c へ upsert します。プレビューを確認して「授業データ送信」を実行してください。</p>
       ${renderValidationIssues(plan.validationIssues)}
       <p class="muted">Batch: ${batch?.sobjectApiName ?? '—'} (${batch?.records.length ?? 0} 件 upsert)</p>
       ${
@@ -94,15 +109,16 @@ function renderLessonSlotSection(plan: LessonSlotImportPlan): string {
           : ''
       }
       <div class="footer-actions">
-        <button type="button" id="btn-sync-lesson-slots" class="btn primary" ${
-          plan.validationIssues.some((i) => i.severity === 'error') ? 'disabled' : ''
-        }>授業データ送信</button>
+        <button type="button" id="btn-sync-lesson-slots" class="btn primary" ${executeButtonAttrs(
+          productionWriteBlocked,
+          plan.validationIssues.some((i) => i.severity === 'error'),
+        )}>授業データ送信</button>
       </div>
     </div>
   `;
 }
 
-function renderReallocationSection(plan: ReallocationPlan): string {
+function renderReallocationSection(plan: ReallocationPlan, productionWriteBlocked?: string | null): string {
   const previewRows = plan.sourceRows
     .filter((row) => row.originalSessionId && row.newLessonId && !row.skipReason)
     .slice(0, 8)
@@ -133,15 +149,19 @@ function renderReallocationSection(plan: ReallocationPlan): string {
           : '<p class="muted">振替登録対象はありません。</p>'
       }
       <div class="footer-actions">
-        <button type="button" id="btn-create-reallocations" class="btn" ${
-          hasErrors || plan.createCount === 0 ? 'disabled' : ''
-        }>振替登録</button>
+        <button type="button" id="btn-create-reallocations" class="btn" ${executeButtonAttrs(
+          productionWriteBlocked,
+          hasErrors || plan.createCount === 0,
+        )}>振替登録</button>
       </div>
     </div>
   `;
 }
 
-function renderStudentSessionCreateSection(plan: StudentSessionCreatePlan): string {
+function renderStudentSessionCreateSection(
+  plan: StudentSessionCreatePlan,
+  productionWriteBlocked?: string | null,
+): string {
   const previewRows = plan.sourceRows
     .filter((row) => row.manaerpAttendance && !row.skipReason)
     .slice(0, 8)
@@ -172,15 +192,19 @@ function renderStudentSessionCreateSection(plan: StudentSessionCreatePlan): stri
           : '<p class="muted">作成対象の Student Session はありません。</p>'
       }
       <div class="footer-actions">
-        <button type="button" id="btn-create-student-sessions" class="btn" ${
-          hasErrors || plan.createCount === 0 ? 'disabled' : ''
-        }>Session 作成</button>
+        <button type="button" id="btn-create-student-sessions" class="btn" ${executeButtonAttrs(
+          productionWriteBlocked,
+          hasErrors || plan.createCount === 0,
+        )}>Session 作成</button>
       </div>
     </div>
   `;
 }
 
-function renderStudentSessionSection(plan: StudentSessionUpdatePlan): string {
+function renderStudentSessionSection(
+  plan: StudentSessionUpdatePlan,
+  productionWriteBlocked?: string | null,
+): string {
   const previewRows = plan.sourceRows
     .filter((row) => row.manaerpAttendance && !row.skipReason)
     .slice(0, 8)
@@ -212,9 +236,10 @@ function renderStudentSessionSection(plan: StudentSessionUpdatePlan): string {
           : '<p class="muted">更新対象の Student Session はありません。</p>'
       }
       <div class="footer-actions">
-        <button type="button" id="btn-sync-student-sessions" class="btn primary" ${
-          hasErrors || plan.updateCount === 0 ? 'disabled' : ''
-        }>Manabie 出欠同期</button>
+        <button type="button" id="btn-sync-student-sessions" class="btn primary" ${executeButtonAttrs(
+          productionWriteBlocked,
+          hasErrors || plan.updateCount === 0,
+        )}>Manabie 出欠同期</button>
       </div>
     </div>
   `;

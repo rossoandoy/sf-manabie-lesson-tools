@@ -6,6 +6,7 @@ import {
   bulkSetAttendance,
   findCellByStudent,
   registerTransfer,
+  registerTransferPair,
   setCellAttendance,
 } from './booth-attendance';
 import { boothCellsToPrintRows, printRowsToBoothCells } from './booth-print-sheet';
@@ -31,8 +32,8 @@ const session = (): BoothGridSession => ({
       booth: 1,
       period: 1,
       seat: 2,
-      studentName: '',
-      subject: '',
+      studentName: '鈴木',
+      subject: '国語',
     },
     {
       id: '2026-06-11|2|2|1',
@@ -64,7 +65,7 @@ describe('booth-attendance', () => {
 
   it('setCellAttendance rejects empty seat and closed day', () => {
     const s = session();
-    expect(setCellAttendance(s, { date: '2026-06-10', booth: 1, period: 1, seat: 2 }, '出席')).toBe(false);
+    expect(setCellAttendance(s, { date: '2026-06-11', booth: 2, period: 2, seat: 2 }, '出席')).toBe(false);
     expect(
       setCellAttendance(s, { date: '2026-06-10', booth: 1, period: 1, seat: 1 }, '出席', [
         { date: '2026-06-10', title: '休校' },
@@ -74,7 +75,7 @@ describe('booth-attendance', () => {
 
   it('bulkSetAttendance skips closed day and empty cells', () => {
     const s = session();
-    expect(bulkSetAttendance(s, '2026-06-10', '出席').updated).toBe(1);
+    expect(bulkSetAttendance(s, '2026-06-10', '出席').updated).toBe(2);
     expect(bulkSetAttendance(s, '2026-06-10', '出席', [{ date: '2026-06-10', title: '休校' }]).updated).toBe(0);
   });
 
@@ -91,6 +92,19 @@ describe('booth-attendance', () => {
     expect(moved?.attendance).toBe('振替');
     expect(moved?.transferFrom).toBe('2026-06-10');
     expect(moved?.countTarget).toBe(false);
+  });
+
+  it('registerTransferPair moves both seats from same slot', () => {
+    const s = session();
+    const result = registerTransferPair(
+      s,
+      { date: '2026-06-10', booth: 1, period: 1 },
+      { date: '2026-06-12', booth: 1, period: 1 },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.transferred).toBe(2);
+    expect(findCellByStudent(s, '2026-06-12', 1, 1, '山田')?.attendance).toBe('振替');
+    expect(findCellByStudent(s, '2026-06-12', 1, 1, '鈴木')?.attendance).toBe('振替');
   });
 
   it('applyAttendanceToCell sets countTarget false for makeup', () => {

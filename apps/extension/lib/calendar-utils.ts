@@ -54,6 +54,12 @@ export function schoolYearFromDate(dateStr: string): number {
   return month >= 4 ? d.getFullYear() : d.getFullYear() - 1;
 }
 
+/** Japanese fiscal year end (March 31) for the given date's school year */
+export function fiscalYearEndDateFrom(dateStr: string): string {
+  const fy = schoolYearFromDate(dateStr);
+  return `${fy + 1}-03-31`;
+}
+
 export function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }

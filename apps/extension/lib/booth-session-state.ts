@@ -19,6 +19,8 @@ import type { SlotSyncEntry } from './slot-sync-state';
 
 export type { AttendanceStatus };
 
+export type BoothViewMode = 'calendar' | 'grid';
+
 export interface BoothGridSettings {
   classroomName: string;
   accountId: string;
@@ -30,6 +32,20 @@ export interface BoothGridSettings {
   visiblePeriods: number[];
   /** Period number → start time label (e.g. "16:00") */
   periodStartTimes?: Record<string, string>;
+  /** Period number → end time label (e.g. "17:00") */
+  periodEndTimes?: Record<string, string>;
+  /** Account / booth count resolved from user Affiliation vs manual override */
+  accountSource?: 'affiliation' | 'manual';
+  /** コマ組タブ表示: 授業スケジュールカレンダー or ブース表 */
+  boothViewMode?: BoothViewMode;
+  /** 左設定パネル折りたたみ */
+  settingsCollapsed?: boolean;
+  /** 右プレビューパネル折りたたみ */
+  previewCollapsed?: boolean;
+  /** 週ナビバー折りたたみ */
+  contextCollapsed?: boolean;
+  /** 大規模グリッド時の日 window オフセット（Phase 15） */
+  dayScrollOffset?: number;
 }
 
 export type LessonKind = '通常' | '体験';
@@ -70,12 +86,13 @@ export interface RepeatRecord {
   type: 'student';
   name: string;
   subject: string;
+  grade?: string;
   dow: number;
   period: number;
   booth: number;
   homeSeat: 1 | 2;
   capacity: SeatCapacity;
-  interval: 'weekly' | 'biweekly';
+  interval: 'weekly' | 'daily' | 'biweekly';
   startDate: string;
   endDate: string;
   status: 'active' | 'ended';
@@ -298,6 +315,7 @@ export function applyRepeatPlan(
       seat: item.seat,
       studentName: record.name,
       subject: record.subject,
+      grade: record.grade,
       repeatId,
       irregular: item.irregular,
       attendance: '未確定',
@@ -336,6 +354,7 @@ export function rescheduleRepeat(
       seat: item.seat,
       studentName: record.name,
       subject: record.subject,
+      grade: record.grade,
       repeatId,
       irregular: item.irregular,
       attendance: '未確定',
@@ -345,4 +364,13 @@ export function rescheduleRepeat(
 
   record.updatedAt = new Date().toISOString();
   return { plan, skips, repeatId };
+}
+
+/** Mark repeat as ended without removing existing cells (Phase 16 policy). */
+export function endRepeatRecord(session: BoothGridSession, repeatId: string): boolean {
+  const record = session.repeatRecords.find((r) => r.id === repeatId && r.status === 'active');
+  if (!record) return false;
+  record.status = 'ended';
+  record.updatedAt = new Date().toISOString();
+  return true;
 }

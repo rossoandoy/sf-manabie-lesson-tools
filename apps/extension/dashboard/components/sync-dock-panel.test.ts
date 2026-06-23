@@ -15,7 +15,8 @@ describe('renderSyncDock', () => {
     });
     expect(root.classList.contains('sync-dock')).toBe(true);
     expect(root.id).toBe('sync-dock-root');
-    expect(root.textContent).toContain('Manabie 同期');
+    expect(root.textContent).toContain('SF 同期');
+    expect(root.textContent).toContain('F19');
     expect(root.querySelector('.sync-dock-sync-host')).toBeTruthy();
   });
 

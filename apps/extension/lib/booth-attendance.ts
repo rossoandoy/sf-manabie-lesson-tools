@@ -1,5 +1,5 @@
 import type { ClosedDateDefinition } from '../src/contracts';
-import type { BoothCell, BoothGridSession } from './booth-session-state';
+import type { BoothCell, BoothGridSession, BoothSlotRef } from './booth-session-state';
 import { cellKey, getCell, upsertCell } from './booth-session-state';
 
 export type AttendanceStatus = '' | '未確定' | '出席' | '欠席' | '振替' | '休講';
@@ -154,4 +154,43 @@ export function registerTransfer(
   upsertCell(session, dest);
 
   return { ok: true };
+}
+
+export interface TransferPairResult extends TransferResult {
+  transferred?: number;
+}
+
+/** Transfer both occupied seats from one slot to the same destination slot (1:2 pair). */
+export function registerTransferPair(
+  session: BoothGridSession,
+  from: BoothSlotRef,
+  to: BoothSlotRef,
+  closedDates: ClosedDateDefinition[] = [],
+): TransferPairResult {
+  const seatsToMove: (1 | 2)[] = [];
+  for (const seat of [1, 2] as const) {
+    const cell = getCell(session, from.date, from.booth, from.period, seat);
+    if (!cellHasStudent(cell)) continue;
+    const destExisting = getCell(session, to.date, to.booth, to.period, seat);
+    if (cellHasStudent(destExisting)) {
+      return { ok: false, error: `振替先席${seat}が既に埋まっています`, transferred: 0 };
+    }
+    seatsToMove.push(seat);
+  }
+  if (!seatsToMove.length) {
+    return { ok: false, error: '振替元に生徒がいません', transferred: 0 };
+  }
+
+  let transferred = 0;
+  for (const seat of seatsToMove) {
+    const result = registerTransfer(
+      session,
+      { date: from.date, booth: from.booth, period: from.period, seat },
+      { date: to.date, booth: to.booth, period: to.period, seat },
+      closedDates,
+    );
+    if (!result.ok) return { ...result, transferred };
+    transferred += 1;
+  }
+  return { ok: true, transferred };
 }

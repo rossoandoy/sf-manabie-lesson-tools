@@ -25,12 +25,13 @@ import { buildScheduleImportPlan } from '../src/services/scheduleImportPlanBuild
 import { buildClosedDateImportPlan } from '../src/services/closedDatePlanBuilder';
 import { executeImportPlan } from '../src/services/registrationExecutor';
 import { runMasterSync, renderMasterSyncSummary } from './components/master-sync-panel';
-import { mountLessonCalendarPanel, mountDrawerPanel } from './components/lesson-calendar-panel';
+import { mountDrawerPanel } from './components/lesson-calendar-panel';
 import { mountClosedDatePanel } from './components/closed-date-calendar-panel';
 import { mountBoothGridPanel } from './components/booth-grid-panel';
 import { mountPrintSheetPanel } from './components/print-sheet-panel';
 import { mountReportPanel } from './components/report-panel';
 import { renderSchedulePreviewPanel, formatExecutionLog } from './components/schedule-preview-panel';
+import { bindSlotSyncActions, renderSlotSyncSummary } from './components/slot-sync-panel';
 import { buildLessonSlotImportPlan } from '../src/services/slotImportPlanBuilder';
 import { buildStudentSessionUpdatePlan } from '../src/services/studentSessionUpdatePlanBuilder';
 import { buildStudentSessionCreatePlan } from '../src/services/studentSessionCreatePlanBuilder';
@@ -52,6 +53,11 @@ import { getBundledLessonDiscoveryForHost } from '../lib/bundled-discovery';
 import { boothCellsToPrintRows } from '../lib/booth-print-sheet';
 import { reconcileClosedDates } from '../lib/closed-date-guard';
 import { loadBoothSession, saveBoothSession } from '../lib/booth-session-state';
+import {
+  applyAffiliationToBoothSession,
+  affiliationFailureMessage,
+  resolveUserAffiliation,
+} from '../src/services/user-affiliation-context';
 import { schoolYearFromDate } from '../lib/calendar-utils';
 import { applySlotSyncFromExecutionLog } from '../lib/slot-sync-state';
 import {
@@ -69,6 +75,7 @@ import {
 import { confirmSandboxExecute, confirmAction } from './components/confirm-modal';
 import { showToast } from './components/toast';
 import { bindSetupChecklist, renderSetupChecklist } from './components/setup-checklist';
+import { productionBlockedReason } from '../lib/production-guard';
 import { summarizeExecutionLog, type SyncDockOptions } from './components/sync-dock-panel';
 
 interface ManabieQueryCacheEntryLocal extends ManabieQueryCacheEntry {}
@@ -78,6 +85,7 @@ interface AppState {
   tabId: number;
   orgBlocked: boolean;
   isSandbox: boolean;
+  orgId: string;
   catalog: LessonMasterCatalog | null;
   lessons: LessonScheduleDefinition[];
   closedDates: ClosedDateDefinition[];
@@ -91,6 +99,7 @@ interface AppState {
   scheduleGapReport: ScheduleGapReport | null;
   selectedLocationId: string;
   boothAccountId: string;
+  affiliationHint: string | null;
   lastExecutionLog: ExecutionLog | null;
   manabieCacheStale: boolean;
   manabieDataLoading: boolean;
@@ -101,6 +110,7 @@ const appState: AppState = {
   tabId: 0,
   orgBlocked: false,
   isSandbox: false,
+  orgId: '',
   catalog: null,
   lessons: [],
   closedDates: [],
@@ -114,6 +124,7 @@ const appState: AppState = {
   scheduleGapReport: null,
   selectedLocationId: '',
   boothAccountId: '',
+  affiliationHint: null,
   lastExecutionLog: null,
   manabieCacheStale: false,
   manabieDataLoading: false,
@@ -125,7 +136,6 @@ let boothWeekGapReport: ScheduleGapReport | null = null;
 let boothWeekGapLoading = false;
 let boothWeekGapKey: string | null = null;
 
-let refreshLessonPanel: ((partial?: Partial<import('./components/lesson-calendar-panel').LessonCalendarPanelOptions>) => Promise<void>) | null = null;
 let refreshClosedPanel: ((partial?: Partial<import('./components/closed-date-calendar-panel').ClosedDatePanelOptions>) => Promise<void>) | null = null;
 let refreshBoothPanel: ((partial?: Partial<import('./components/booth-grid-panel').BoothGridPanelRefreshOptions>) => Promise<void>) | null = null;
 let refreshPrintSheetPanel: ((partial?: Partial<import('./components/print-sheet-panel').PrintSheetPanelRefreshOptions>) => Promise<void>) | null = null;
@@ -143,6 +153,7 @@ function scheduleSyncDockRefresh(): void {
   syncDockRefreshScheduled = true;
   requestAnimationFrame(() => {
     syncDockRefreshScheduled = false;
+    refreshPreviewTabSlotSync();
     void refreshPrintSheetPanel?.({ refreshSlotSync: true });
   });
 }
@@ -251,6 +262,7 @@ function syncDockOptions(): SyncDockOptions {
   return {
     catalog: appState.catalog,
     isSandbox: appState.isSandbox,
+    productionWriteBlocked: productionBlockedReason(appState.orgId, appState.isSandbox),
     slotPlan: appState.slotPlan,
     studentSessionPlan: appState.studentSessionPlan,
     studentSessionCreatePlan: appState.studentSessionCreatePlan,
@@ -300,11 +312,25 @@ async function refreshSetupChecklist(): Promise<void> {
     accountId: appState.boothAccountId,
     hostname: appState.hostname,
     invoiceSynced: Boolean(invoiceCache.lastSyncedAt),
+    affiliationHint: appState.affiliationHint,
   });
 }
 
+function previewTabSlotOptions(): import('./components/slot-sync-panel').SlotSyncPanelOptions {
+  return {
+    slotPlan: appState.slotPlan,
+    productionWriteBlocked: productionBlockedReason(appState.orgId, appState.isSandbox),
+  };
+}
+
+function refreshPreviewTabSlotSync(): void {
+  const root = document.getElementById('slot-sync-preview-root');
+  if (!root) return;
+  renderSlotSyncSummary(root, previewTabSlotOptions());
+}
+
 function updateRegisterButton(): void {
-  const btn = document.getElementById('btn-register') as HTMLButtonElement | null;
+  const btn = document.getElementById('btn-register-legacy') as HTMLButtonElement | null;
   if (!btn) return;
   const hasErrors = (appState.schedulePlan?.validationIssues ?? []).some((issue) => issue.severity === 'error');
   btn.disabled = appState.orgBlocked || !appState.catalog || !appState.lessons.length || hasErrors;
@@ -336,6 +362,7 @@ function rebuildPlans(): void {
     appState.closedPlan,
   );
   void rebuildSlotPlan();
+  refreshPreviewTabSlotSync();
   updateRegisterButton();
 }
 
@@ -544,10 +571,41 @@ async function bindOrgContext(): Promise<boolean> {
   setCurrentHost(hostname);
   const org = await getOrgIdentity(hostname);
   appState.isSandbox = org.isSandbox;
+  appState.orgId = org.orgId;
   const orgBadge = document.getElementById('org-badge');
   if (orgBadge) orgBadge.textContent = `${org.username} @ ${hostname}`;
-  if (org.isSandbox) document.getElementById('sandbox-badge')?.classList.remove('hidden');
+  const sandboxBadge = document.getElementById('sandbox-badge');
+  const productionBadge = document.getElementById('production-badge');
+  if (org.isSandbox) {
+    sandboxBadge?.classList.remove('hidden');
+    productionBadge?.classList.add('hidden');
+  } else {
+    sandboxBadge?.classList.add('hidden');
+    productionBadge?.classList.remove('hidden');
+  }
   return true;
+}
+
+async function applyUserAffiliationToBoothSession(): Promise<boolean> {
+  if (!appState.hostname) return false;
+  const result = await resolveUserAffiliation(appState.hostname, {
+    locations: appState.catalog?.catalogs.locations,
+  });
+  if (result.context) {
+    appState.affiliationHint = null;
+    const session = await loadBoothSession(appState.hostname);
+    if (session.settings.accountSource === 'manual' && session.settings.accountId.trim()) {
+      return false;
+    }
+    const updated = applyAffiliationToBoothSession(session, result.context);
+    await saveBoothSession(appState.hostname, updated);
+    appState.boothAccountId = updated.settings.accountId;
+    return true;
+  }
+  if (!appState.boothAccountId.trim()) {
+    appState.affiliationHint = affiliationFailureMessage(result);
+  }
+  return false;
 }
 
 async function loadInitialData(): Promise<void> {
@@ -557,6 +615,9 @@ async function loadInitialData(): Promise<void> {
   appState.lessons = lessonSession.lessons;
   appState.closedDates = closedSession.closedDates;
   appState.selectedLocationId = appState.catalog?.catalogs.locations[0]?.id ?? '';
+  await applyUserAffiliationToBoothSession();
+  const boothSession = await loadBoothSession(appState.hostname);
+  appState.boothAccountId = boothSession.settings.accountId;
   rebuildPlans();
 }
 
@@ -570,16 +631,6 @@ async function reconcileClosedDatesToBoothSession(): Promise<void> {
 }
 
 async function mountPanels(): Promise<void> {
-  refreshLessonPanel = await mountLessonCalendarPanel(document.getElementById('lesson-panel-root')!, {
-    hostname: appState.hostname,
-    catalog: appState.catalog,
-    closedDates: appState.closedDates,
-    editorRoot: document.getElementById('lesson-editor-root')!,
-    onChange: (lessons) => {
-      appState.lessons = lessons;
-      rebuildPlans();
-    },
-  });
   refreshClosedPanel = await mountClosedDatePanel(document.getElementById('closed-panel-root')!, {
     hostname: appState.hostname,
     catalog: appState.catalog,
@@ -590,7 +641,6 @@ async function mountPanels(): Promise<void> {
       const session = await loadBoothSession(appState.hostname);
       const { session: updated } = reconcileClosedDates(session, closedDates);
       await saveBoothSession(appState.hostname, updated);
-      void refreshLessonPanel?.({ closedDates });
       void refreshBoothPanel?.({ closedDates, reloadSession: true });
       void refreshPrintSheetPanel?.({ closedDates, reloadSession: true });
       void refreshReportPanel?.({ closedDates, reloadSession: true });
@@ -602,9 +652,12 @@ async function mountPanels(): Promise<void> {
     catalog: appState.catalog,
     getWeekGapReport: () => ({ report: boothWeekGapReport, loading: boothWeekGapLoading }),
     onWeekGapRefresh: (options) => refreshBoothWeekGap(options),
-    onSessionChange: () => {
+    onSessionChange: (detail) => {
       markManabieCacheStale();
-      void refreshPrintSheetPanel?.({ reloadSession: true });
+      void refreshPrintSheetPanel?.({
+        reloadSession: true,
+        resetDateRange: detail?.resetPrintDateRange,
+      });
       void refreshReportPanel?.({ reloadSession: true });
       void rebuildSlotPlan(false);
     },
@@ -612,11 +665,9 @@ async function mountPanels(): Promise<void> {
       invalidateManabieCache();
       void rebuildSlotPlan(true);
     },
-    onImportManaerpWeek: async (dateFrom, dateTo) => {
-      if (!cacheRangeCovers(manabieQueryCache, dateFrom, dateTo)) {
-        await refreshManabieData();
-      }
-      return getCachedManaerpSessions(dateFrom, dateTo);
+    onLessonsChange: (lessons) => {
+      appState.lessons = lessons;
+      rebuildPlans();
     },
     onMarkClosedDate: async (date, title) => {
       if (appState.closedDates.some((c) => c.date === date)) {
@@ -639,11 +690,25 @@ async function mountPanels(): Promise<void> {
       const boothSession = await loadBoothSession(appState.hostname);
       const { session: updated } = reconcileClosedDates(boothSession, closedDates);
       await saveBoothSession(appState.hostname, updated);
-      void refreshLessonPanel?.({ closedDates });
       void refreshClosedPanel?.({});
       void refreshBoothPanel?.({ closedDates, reloadSession: true });
       void refreshPrintSheetPanel?.({ closedDates, reloadSession: true });
       showToast(`${date} を休校日に設定しました`, 'success');
+    },
+    onUnmarkClosedDate: async (date) => {
+      const existing = appState.closedDates.find((c) => c.date === date);
+      if (!existing) {
+        showToast('休校日ではありません', 'error');
+        return;
+      }
+      const closedDates = appState.closedDates.filter((c) => c.date !== date);
+      appState.closedDates = closedDates;
+      await saveClosedDateSession(appState.hostname, { closedDates });
+      rebuildPlans();
+      void refreshClosedPanel?.({});
+      void refreshBoothPanel?.({ closedDates, reloadSession: false });
+      void refreshPrintSheetPanel?.({ closedDates, reloadSession: false });
+      showToast(`${date} の休校日を解除しました`, 'success');
     },
   });
   refreshPrintSheetPanel = await mountPrintSheetPanel(document.getElementById('print-sheet-panel-root')!, {
@@ -692,6 +757,14 @@ async function mountPanels(): Promise<void> {
   renderMasterSyncSummary(document.getElementById('master-sync-summary')!, appState.catalog);
   bindClosedDateRegistration();
   bindSetupChecklist(document.getElementById('setup-checklist-root')!);
+  const previewSlotRoot = document.getElementById('slot-sync-preview-root');
+  if (previewSlotRoot) {
+    bindSlotSyncActions(previewSlotRoot, previewTabSlotOptions, setExecutionLog, {
+      onSlotSyncExecuted: handleSlotSyncExecuted,
+      ensureFreshManabieCache: () => ensureFreshManabieCacheBeforeExecute(),
+    });
+    refreshPreviewTabSlotSync();
+  }
 }
 
 function bindClosedDateRegistration(): void {
@@ -730,6 +803,44 @@ function bindClosedDateRegistration(): void {
   });
 }
 
+function bindDashboardChrome(): void {
+  const CHROME_KEY = 'manabie-dashboard-chrome-collapsed';
+  const chrome = document.getElementById('dashboard-chrome');
+  const main = document.querySelector('.dashboard-main');
+  const expandBtn = document.getElementById('btn-toggle-dashboard-chrome');
+  const collapseBtn = document.getElementById('btn-collapse-chrome');
+  const collapsedBadge = document.getElementById('org-badge-collapsed');
+  const orgBadge = document.getElementById('org-badge');
+
+  const apply = (collapsed: boolean) => {
+    chrome?.classList.toggle('collapsed', collapsed);
+    main?.classList.toggle('dashboard-main-expanded', collapsed);
+    if (collapsedBadge && orgBadge) {
+      collapsedBadge.textContent = orgBadge.textContent;
+      collapsedBadge.classList.toggle('hidden', !orgBadge.textContent?.trim());
+    }
+    if (expandBtn) expandBtn.textContent = collapsed ? '▼' : '▲';
+    try {
+      localStorage.setItem(CHROME_KEY, collapsed ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const collapsed = (() => {
+    try {
+      return localStorage.getItem(CHROME_KEY) === '1';
+    } catch {
+      return false;
+    }
+  })();
+  apply(collapsed);
+
+  const toggle = () => apply(!chrome?.classList.contains('collapsed'));
+  expandBtn?.addEventListener('click', toggle);
+  collapseBtn?.addEventListener('click', toggle);
+}
+
 function bindTabs(): void {
   document.querySelectorAll('.tab-btn').forEach((button) => {
     button.addEventListener('click', () => {
@@ -742,11 +853,12 @@ function bindTabs(): void {
 }
 
 function bindDrawer(): void {
-  document.getElementById('btn-open-drawer')?.addEventListener('click', () => {
-    document.getElementById('side-drawer')?.classList.add('open');
-  });
   document.getElementById('btn-close-drawer')?.addEventListener('click', () => {
     document.getElementById('side-drawer')?.classList.remove('open');
+  });
+  document.addEventListener('click', (event) => {
+    const target = (event.target as HTMLElement).closest('[data-action="open-side-drawer"]');
+    if (target) document.getElementById('side-drawer')?.classList.add('open');
   });
 }
 
@@ -756,11 +868,11 @@ async function bindActions(): Promise<void> {
     try {
       appState.catalog = await runMasterSync(appState.hostname);
       appState.selectedLocationId = appState.catalog.catalogs.locations[0]?.id ?? '';
+      await applyUserAffiliationToBoothSession();
       renderMasterSyncSummary(document.getElementById('master-sync-summary')!, appState.catalog);
       bindClosedDateRegistration();
-      await refreshLessonPanel?.();
-      await refreshClosedPanel?.();
-      await refreshBoothPanel?.({ catalog: appState.catalog });
+      await refreshClosedPanel?.({ catalog: appState.catalog });
+      await refreshBoothPanel?.({ catalog: appState.catalog, reloadSession: true });
       await refreshPrintSheetPanel?.({ catalog: appState.catalog });
       await refreshReportPanel?.({ catalog: appState.catalog });
       rebuildPlans();
@@ -776,7 +888,7 @@ async function bindActions(): Promise<void> {
     }
   });
 
-  document.getElementById('btn-register')?.addEventListener('click', async () => {
+  document.getElementById('btn-register-legacy')?.addEventListener('click', async () => {
     if (!appState.schedulePlan) return;
     const phrase = await confirmSandboxExecute({
       title: '授業スケジュール Manabie 登録',
@@ -811,10 +923,12 @@ async function init(): Promise<void> {
   const ok = await bindOrgContext();
   if (!ok) return;
   bindTabs();
+  bindDashboardChrome();
   bindDrawer();
   await loadInitialData();
   await reconcileClosedDatesToBoothSession();
   await mountPanels();
+  void refreshBoothPanel?.({ catalog: appState.catalog, reloadSession: true });
   await rebuildSlotPlan(true);
   await bindActions();
   await refreshSetupChecklist();

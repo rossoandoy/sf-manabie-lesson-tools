@@ -49,6 +49,16 @@ Discovery profile: `apps/extension/data/discovery-trg2-extuat.json`
 | Booth / PrintSheet | local session | 1 seat = 1 student daily assignment |
 | SF sync (2D) | `Lesson_Slot__c` | Excel F19 compatible upsert via `Slot_Key__c` |
 
+### 1:2 ブース = 1 生徒 1 Slot レコード（Phase 11 確認）
+
+1 ブース・1 時限の 1:2 授業でも、**席1・席2それぞれが独立した PrintSheet 行 → `Lesson_Slot__c` 1 件**。
+
+- `boothCellsToPrintRows`: seat 1 / seat 2 → 別 `PrintSheetRow`
+- `Slot_Key__c`: `{accountId}_{YYYYMMDD}_P{period}_B{booth}_{studentName}`（席番号はキーに含めず、生徒名で一意）
+- 回数報告: 1 row = 1 コマ（集計にそのまま利用）
+
+Manabie 標準の 1 Lesson + N Student_Sessions モデルとは粒度が異なる。TRG 日常運用の正本は **Lesson_Slot__c（F19）**。
+
 ## Reporting (Phase 2E–2F)
 
 Monthly report aggregates booth activity via `LessonActivitySource` → `BoothActivitySource` (Phase 2E). Closed dates are excluded from right-table metrics (Phase 2F / F15).
@@ -105,9 +115,9 @@ When Manabie **Lesson exists** but **Student_Session is missing**, Sync Dock **M
 
 Implementation: [`studentSessionCreatePlanBuilder.ts`](../apps/extension/src/services/studentSessionCreatePlanBuilder.ts), [`manabie-query-cache.ts`](../apps/extension/lib/manabie-query-cache.ts) (gap reuse from fiscal SOQL cache).
 
-### Booth performance (Phase 5 — implemented)
+### Booth performance (Phase 5 / Phase 15)
 
-[`booth-grid-panel.ts`](../apps/extension/dashboard/components/booth-grid-panel.ts): virtual scroll activates when `boothCount × periods × weekDays × 2 > 400`, rendering 2 day-blocks at a time with day navigation. [`manabie-query-cache.ts`](../apps/extension/lib/manabie-query-cache.ts) reuses cached Lesson/Session queries for week gap subset.
+[`booth-grid-panel.ts`](../apps/extension/dashboard/components/booth-grid-panel.ts) + [`booth-grid-virtual.ts`](../apps/extension/lib/booth-grid-virtual.ts): when `boothCount × periods × weekDays × 2 > 400`, renders a **2-day window** with ◀日/日▶ toolbar navigation; week nav resets `dayScrollOffset`. Text input uses partial DOM updates (no full grid re-render on keystroke). [`manabie-query-cache.ts`](../apps/extension/lib/manabie-query-cache.ts) reuses cached Lesson/Session queries for week gap subset.
 
 ### F13 paid koma (Phase 6 — implemented)
 

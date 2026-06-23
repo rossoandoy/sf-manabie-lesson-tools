@@ -70,6 +70,75 @@ export async function confirmAction(options: {
   });
 }
 
+export async function confirmTokenInput(options: {
+  title: string;
+  messageHtml: string;
+  expectedToken: string;
+  confirmLabel?: string;
+}): Promise<boolean> {
+  const root = ensureOverlay();
+  const titleEl = root.querySelector('.modal-title') as HTMLElement;
+  const bodyEl = root.querySelector('.modal-body') as HTMLElement;
+  const cancelBtn = root.querySelector('.modal-cancel') as HTMLButtonElement;
+  const confirmBtn = root.querySelector('.modal-confirm') as HTMLButtonElement;
+
+  titleEl.textContent = options.title;
+  bodyEl.innerHTML = `
+    ${options.messageHtml}
+    <p class="modal-phrase-hint">確認トークンを入力してください:</p>
+    <code class="modal-phrase-target">${options.expectedToken}</code>
+    <label class="modal-phrase-field">トークン
+      <input type="text" class="modal-phrase-input" autocomplete="off" spellcheck="false" />
+    </label>
+    <p class="modal-phrase-match muted" aria-live="polite"></p>
+  `;
+  cancelBtn.textContent = 'キャンセル';
+  confirmBtn.textContent = options.confirmLabel ?? '実行';
+  confirmBtn.classList.add('danger');
+  confirmBtn.disabled = true;
+
+  const input = bodyEl.querySelector('.modal-phrase-input') as HTMLInputElement;
+  const matchEl = bodyEl.querySelector('.modal-phrase-match') as HTMLElement;
+
+  const syncMatch = () => {
+    const ok = input.value === options.expectedToken;
+    confirmBtn.disabled = !ok;
+    matchEl.textContent = ok ? 'トークン一致' : '';
+    matchEl.classList.toggle('match-ok', ok);
+  };
+  input.addEventListener('input', syncMatch);
+
+  root.classList.remove('hidden');
+  input.focus();
+
+  return new Promise((resolve) => {
+    const cleanup = (result: boolean) => {
+      closeModal();
+      input.removeEventListener('input', syncMatch);
+      cancelBtn.removeEventListener('click', onCancel);
+      confirmBtn.removeEventListener('click', onConfirm);
+      root.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    };
+    const onCancel = () => cleanup(false);
+    const onConfirm = () => {
+      if (input.value !== options.expectedToken) return;
+      cleanup(true);
+    };
+    const onBackdrop = (event: MouseEvent) => {
+      if (event.target === root) cleanup(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') cleanup(false);
+    };
+    cancelBtn.addEventListener('click', onCancel);
+    confirmBtn.addEventListener('click', onConfirm);
+    root.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
 export async function confirmSandboxExecute(options: {
   title: string;
   summaryHtml: string;

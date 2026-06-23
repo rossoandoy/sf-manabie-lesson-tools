@@ -61,3 +61,16 @@ BoothGrid (2 seats × booth × period × date)
 2A 完了時点で Excel ブース表の核心操作を Web 化。SF 同期は 2D で追加。
 
 **Phase 9（2026-06）**: 2A MVP に加え、コマ copy/paste/move、講師繰り返し、学年自動、日次ツールバー、振替 UX、週コピーを実装。残ギャップは [feature-parity.md](./feature-parity.md) 参照。
+
+**Phase 10（2026-06）**: Excel ブース表と同型の列レイアウト（日付｜ブース｜時限×4列×2行）、Affiliation から教室 Account / `TRG_BoothCount__c` 自動反映、生徒契約 1:1 時の席2グレーアウト。
+
+### Excel 列モデル（Phase 10）
+
+```text
+| 日付(rowspan) | ブース(rowspan=2) | 1限 講師(rowspan=2) | 生徒 | 学年 | 教科 | 2限 … |
+|               |                   |                     | 生徒(席2) | 学年 | 教科 |       |
+```
+
+- 列順: **生徒 → 学年 → 教科**（Excel `M00_Constants.bas` 準拠）
+- 講師列: 黄色背景、2行結合
+- 1:1: 席1の Contact 契約が 1:1 かつ席2空 → 席2を `(1:1枠)` で無効化

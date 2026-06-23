@@ -181,6 +181,11 @@ describe('booth-print-sheet', () => {
     expect(dates.length).toBeGreaterThan(0);
   });
 
+  it('expandRepeatDates daily includes every day in range', () => {
+    const dates = expandRepeatDates('2026-06-09', '2026-06-12', 'daily');
+    expect(dates).toEqual(['2026-06-09', '2026-06-10', '2026-06-11', '2026-06-12']);
+  });
+
   it('buildRepeatPlan skips closed dates', () => {
     const closed = new Set(['2026-06-17']);
     const { plan, skips } = buildRepeatPlan([], ['2026-06-17', '2026-06-18'], 1, 1, 1, '1:1', closed);

@@ -12,7 +12,7 @@ import {
 
 export type { AttendanceStatus, LessonKind, StudentType };
 
-export type RepeatInterval = 'weekly' | 'biweekly';
+export type RepeatInterval = 'weekly' | 'daily' | 'biweekly';
 export type SeatCapacity = '1:1' | '1:2';
 
 export interface PrintSheetRow {
@@ -326,12 +326,21 @@ export function expandRepeatDates(
   interval: RepeatInterval,
   dow?: number,
 ): string[] {
-  const stepDays = interval === 'biweekly' ? 14 : 7;
   const dates: string[] = [];
   const start = parseDateKey(startDate);
   const end = parseDateKey(endDate);
   if (start > end) return dates;
 
+  if (interval === 'daily') {
+    let current = new Date(start);
+    while (current <= end) {
+      dates.push(formatDateKeyLocal(current));
+      current.setDate(current.getDate() + 1);
+    }
+    return dates;
+  }
+
+  const stepDays = interval === 'biweekly' ? 14 : 7;
   let current = new Date(start);
   if (dow !== undefined) {
     while (current.getDay() !== dow && current <= end) {

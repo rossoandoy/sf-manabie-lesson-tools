@@ -98,10 +98,11 @@ export async function getOrgIdentity(hostname: string): Promise<OrgIdentity> {
   }
   const data = await response.json();
   const orgId = String(data.organization_id ?? '');
+  const userId = String(data.user_id ?? '');
   const username = String(data.preferred_username ?? data.email ?? '');
   const instanceUrl = String(data.urls?.custom_domain ?? baseUrl);
   const isSandbox = Boolean(data.urls?.custom_domain?.includes('sandbox') || session.hostname.includes('sandbox'));
-  return { orgId, username, instanceUrl, isSandbox };
+  return { orgId, userId, username, instanceUrl, isSandbox };
 }
 
 export async function createSObjectCollection(

@@ -184,7 +184,7 @@ export function mountClosedEditorDrawer(
         <button type="button" class="btn" id="btn-close-closed-editor">×</button>
       </div>
       <form id="closed-form" class="form-grid form-grid-single">
-        <label>休校日<input name="title" required value="${existing?.title ?? ''}" /></label>
+        <label>表示する休校日名<input name="title" required value="${existing?.title ?? ''}" placeholder="例: 夏期講習・臨時休校" /></label>
         <label>日付<input name="date" type="date" required value="${existing?.date ?? dateKey}" /></label>
         <label>年度<select name="academicYearId">${(catalog?.catalogs.academicYears ?? [])
           .map(

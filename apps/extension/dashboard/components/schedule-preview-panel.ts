@@ -34,8 +34,9 @@ export function renderSchedulePreviewPanel(
       ${validationHtml}
       <ul>${batchHtml}</ul>
       <div class="footer-actions">
-        <button type="button" id="btn-download-schedule-csv" class="btn">CSV（監査）</button>
+        <button type="button" id="btn-download-schedule-csv" class="btn">エクスポート（任意）</button>
       </div>
+      <p class="muted">API 送信前のローカルバックアップ用。通常運用では不要です。</p>
     </div>
     ${
       closedPlan
@@ -43,7 +44,7 @@ export function renderSchedulePreviewPanel(
             <h2>休校日 ImportPlan（Phase 1.5）</h2>
             <p class="muted">拠点: ${closedPlan.locationName || '未選択'} / Calendar: ${closedPlan.academicCalendarId || '未選択'}</p>
             <ul>${closedPlan.batches.map((batch) => `<li>${batch.artifactKind}: ${batch.records.length}件</li>`).join('')}</ul>
-            <button type="button" id="btn-download-closed-csv" class="btn">休校日 CSV（監査）</button>
+            <button type="button" id="btn-download-closed-csv" class="btn">エクスポート（任意）</button>
           </div>`
         : ''
     }
