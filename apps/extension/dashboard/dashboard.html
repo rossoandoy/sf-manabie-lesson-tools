@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manabie Lesson Tools Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <div class="dashboard">
+    <div class="dashboard-chrome" id="dashboard-chrome">
+      <div class="dashboard-chrome-bar">
+        <button type="button" class="btn btn-sm" id="btn-toggle-dashboard-chrome" title="ヘッダーとタブを折りたたむ">▲</button>
+        <span class="dashboard-chrome-mini muted">Manabie Lesson Tools</span>
+        <span id="org-badge-collapsed" class="org-badge org-badge-mini hidden">—</span>
+      </div>
+      <div class="dashboard-chrome-body" id="dashboard-chrome-body">
+    <header class="dashboard-header">
+      <h1>Manabie Lesson Tools</h1>
+      <span id="org-badge" class="org-badge">接続確認中…</span>
+      <span id="sandbox-badge" class="org-badge sandbox-badge hidden">Sandbox</span>
+      <span id="production-badge" class="org-badge production-badge hidden">Production</span>
+      <button id="btn-sync-masters" class="btn">前提マスタ同期</button>
+    </header>
+
+    <div id="setup-checklist-root"></div>
+
+    <nav class="tab-bar">
+      <button class="tab-btn active" data-tab="booth">コマ組</button>
+      <button class="tab-btn" data-tab="print">授業一覧</button>
+      <button class="tab-btn" data-tab="report">回数報告</button>
+      <button class="tab-btn" data-tab="closed">休校日</button>
+      <button class="tab-btn" data-tab="preview">Manabie登録</button>
+    </nav>
+    <div class="dashboard-chrome-footer">
+      <button type="button" class="btn btn-sm" id="btn-collapse-chrome">▲ ヘッダーを折りたたむ</button>
+    </div>
+      </div>
+    </div>
+
+    <main class="dashboard-main">
+      <div id="blocked-message" class="panel-card hidden">
+        <p>Org コンテキストが無効です。Salesforce タブから拡張を開き直してください。</p>
+      </div>
+
+      <section id="tab-booth" class="tab-panel">
+        <div id="booth-panel-root"></div>
+      </section>
+
+      <section id="tab-print" class="tab-panel hidden">
+        <div id="print-sheet-panel-root"></div>
+      </section>
+
+      <section id="tab-report" class="tab-panel hidden">
+        <div id="report-panel-root"></div>
+      </section>
+
+      <section id="tab-closed" class="tab-panel hidden">
+        <div class="calendar-workspace">
+          <div id="closed-panel-root" class="calendar-main"></div>
+          <div id="closed-editor-root" class="editor-drawer-host"></div>
+        </div>
+      </section>
+
+      <section id="tab-preview" class="tab-panel hidden">
+        <div id="slot-sync-preview-root" class="panel-card"></div>
+        <details class="panel-card legacy-import-panel">
+          <summary>授業スケジュール Import（レガシー）</summary>
+          <p class="muted">通常は Lesson_Slot__c 同期を使用してください。授業一覧カレンダー向けの旧 ImportPlan です。</p>
+          <div id="preview-panel-root"></div>
+          <div class="footer-actions">
+            <button id="btn-register-legacy" class="btn btn-sm" disabled>レガシー Import 実行</button>
+          </div>
+        </details>
+        <div id="master-sync-summary" class="panel-card"></div>
+        <div id="closed-register-panel" class="panel-card hidden">
+          <h2>休校日 Manabie 登録（Phase 1.5）</h2>
+          <label>拠点
+            <select id="closed-location-select"></select>
+          </label>
+          <div class="footer-actions">
+            <button type="button" id="btn-register-closed" class="btn primary">休校日を Manabie へ登録</button>
+          </div>
+        </div>
+      </section>
+
+      <details class="execution-log-panel">
+        <summary>実行ログ（詳細）</summary>
+        <pre id="execution-log" class="execution-log">—</pre>
+      </details>
+    </main>
+  </div>
+
+  <aside id="side-drawer" class="drawer">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <strong>授業タイムスロット</strong>
+      <button id="btn-close-drawer" class="btn">×</button>
+    </div>
+    <div id="drawer-root"></div>
+  </aside>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>

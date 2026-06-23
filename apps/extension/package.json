@@ -1,0 +1,29 @@
+{
+  "name": "@manabie/lesson-tools-extension",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate:icons": "node scripts/generate-icons.mjs",
+    "assert:dist": "node scripts/assert-extension-dist.mjs",
+    "prebuild": "npm run generate:icons",
+    "build": "node esbuild.config.mjs",
+    "prewatch": "npm run generate:icons",
+    "watch": "node esbuild.config.mjs --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "package": "npm run build && node scripts/package-dist.mjs",
+    "e2e:execute": "E2E_LIVE=1 vitest run --config vitest.e2e.config.ts",
+    "e2e:master-sync": "node scripts/verify-master-sync-live.mjs",
+    "e2e:live": "E2E_LIVE=1 vitest run --config vitest.e2e.config.ts",
+    "e2e:live:dry": "E2E_LIVE=1 E2E_DRY_RUN=1 vitest run --config vitest.e2e.config.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "esbuild": "^0.24.2",
+    "jsdom": "^29.1.1",
+    "sharp": "^0.33.5",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

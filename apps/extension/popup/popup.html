@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manabie Lesson Tools</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="popup">
+    <header class="popup-header">
+      <img src="../icons/icon48.png" alt="" class="popup-icon" width="40" height="40" />
+      <div>
+        <h1>Lesson Tools</h1>
+        <p class="subtitle">Manabie 授業スケジュール登録</p>
+      </div>
+    </header>
+
+    <div id="connected-state" class="panel hidden">
+      <p class="label">接続先</p>
+      <p id="hostname-display" class="value"></p>
+      <button id="btn-dashboard" class="btn primary">ダッシュボードを開く</button>
+    </div>
+
+    <div id="not-sf-state" class="panel hidden">
+      <p>Salesforce ページを開くか、Salesforce にログインしてください。</p>
+    </div>
+
+    <div id="no-session-state" class="panel hidden">
+      <p>セッションが見つかりません。Salesforce にログインし直してください。</p>
+    </div>
+
+    <footer class="popup-footer">
+      <details class="popup-build-details">
+        <summary>バージョン情報</summary>
+        <p id="popup-build-stamp" class="muted">読み込み中…</p>
+      </details>
+    </footer>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
