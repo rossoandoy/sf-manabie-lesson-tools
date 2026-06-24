@@ -4,8 +4,11 @@ Sandbox E2E Sign-off チェックリスト: [docs/e2e-sandbox-signoff.md](../e2e
 
 ## 1. インストール
 
-1. Chrome で拡張 `Manabie Lesson Tools` を読み込む
-2. trg2-extuat（Sandbox）にログイン
+初回セットアップは **[利用開始ガイド](./getting-started-ja.md)** を参照してください。  
+IT 担当者向けの配布手順は **[配布ガイド](./distribution-guide-ja.md)** です。
+
+1. Chrome で拡張 `Manabie Lesson Tools` を読み込む（ZIP 解凍 → `chrome://extensions` → 開発者モード）
+2. trg2--extuat（Sandbox）にログイン
 3. 拡張 Popup → **ダッシュボードを開く**
 
 ## 2. 前提マスタ同期
